@@ -3,278 +3,105 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-
 <title>YouTube Analytics</title>
-
 <script src="https://cdn.jsdelivr.net/npm/echarts/dist/echarts.min.js"></script>
-
 <style>
-body{
-    margin:0;
-    padding:20px;
-    background:#0f172a;
-    color:white;
-    font-family:Arial,sans-serif;
-}
-
-.container{
-    max-width:1200px;
-    margin:auto;
-}
-
-h1{
-    text-align:center;
-}
-
-input{
-    width:250px;
-    padding:12px;
-    border:none;
-    border-radius:8px;
-    font-size:16px;
-}
-
-button{
-    padding:12px 20px;
-    border:none;
-    border-radius:8px;
-    cursor:pointer;
-    font-size:16px;
-}
-
-.stats{
-    display:grid;
-    grid-template-columns:repeat(auto-fit,minmax(220px,1fr));
-    gap:15px;
-    margin-top:20px;
-}
-
-.card{
-    background:#1e293b;
-    padding:15px;
-    border-radius:12px;
-}
-
-.card h3{
-    margin:0 0 10px 0;
-}
-
-.card span{
-    font-size:24px;
-    font-weight:bold;
-}
-
-#thumbnail{
-    margin-top:20px;
-    border-radius:12px;
-    max-width:100%;
-}
-
-.chart{
-    width:100%;
-    height:350px;
-    margin-top:25px;
-    background:#1e293b;
-    border-radius:12px;
-}
+body{margin:0;padding:20px;background:#0f172a;color:white;font-family:Arial,sans-serif}
+.container{max-width:1200px;margin:auto}
+input{width:300px;padding:12px;border:none;border-radius:8px}
+button{padding:12px 18px;border:none;border-radius:8px;cursor:pointer;margin-left:5px}
+.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:15px;margin-top:20px}
+.card,.chart{background:#1e293b;border-radius:12px}
+.card{padding:15px}
+.chart{width:100%;height:350px;margin-top:20px}
+#thumbnail{margin-top:20px;max-width:100%;border-radius:12px}
 </style>
 </head>
-
 <body>
-
 <div class="container">
-
 <h1>YouTube Analytics</h1>
 
-<input
-id="videoId"
-placeholder="Введите ID видео"
-/>
+<input id="videoId" placeholder="Введите ID видео">
+<button onclick="loadVideo()">Загрузить</button>
+<button onclick="exportCSV()">Экспорт CSV</button>
 
-<button onclick="loadVideo()">
-Загрузить
-</button>
-
-<div id="title"></div>
-
-<img id="thumbnail" />
+<h2 id="title"></h2>
+<img id="thumbnail">
 
 <div class="stats">
-
-<div class="card">
-<h3>👁️ Просмотры</h3>
-<span id="views">0</span>
-</div>
-
-<div class="card">
-<h3>👍 Лайки</h3>
-<span id="likes">0</span>
-</div>
-
-<div class="card">
-<h3>💬 Комментарии</h3>
-<span id="comments">0</span>
-</div>
-
+<div class="card"><h3>👁️ Просмотры</h3><div id="views">0</div></div>
+<div class="card"><h3>👍 Лайки</h3><div id="likes">0</div></div>
+<div class="card"><h3>💬 Комментарии</h3><div id="comments">0</div></div>
 </div>
 
 <div id="viewsChart" class="chart"></div>
 <div id="likesChart" class="chart"></div>
 <div id="commentsChart" class="chart"></div>
 
-</div>
-
 <script>
+let currentHistory=[];
 
-const viewsChart =
-    echarts.init(
-        document.getElementById("viewsChart")
-    );
-
-const likesChart =
-    echarts.init(
-        document.getElementById("likesChart")
-    );
-
-const commentsChart =
-    echarts.init(
-        document.getElementById("commentsChart")
-    );
+const viewsChart=echarts.init(document.getElementById("viewsChart"));
+const likesChart=echarts.init(document.getElementById("likesChart"));
+const commentsChart=echarts.init(document.getElementById("commentsChart"));
 
 async function loadVideo(){
+ const id=document.getElementById("videoId").value.trim();
+ if(!id){alert("Введите ID видео");return;}
 
-    const id =
-        document.getElementById("videoId")
-        .value
-        .trim();
+ const res=await fetch(`https://livecounts.lol/api/video/${id}/analytics`);
+ const data=await res.json();
 
-    if(!id){
-        alert("Введите ID видео");
-        return;
-    }
+ currentHistory=data.history||[];
 
-    try{
+ document.getElementById("title").textContent=data.video.title;
+ document.getElementById("thumbnail").src=data.currentStats.thumbnailUrl;
+ document.getElementById("views").textContent=data.currentStats.viewCount.toLocaleString();
+ document.getElementById("likes").textContent=data.currentStats.likeCount.toLocaleString();
+ document.getElementById("comments").textContent=data.currentStats.commentCount.toLocaleString();
 
-        const response =
-            await fetch(
-                `https://livecounts.lol/api/video/${id}/analytics`
-            );
+ const times=currentHistory.map(x=>new Date(x.timestamp).toLocaleTimeString());
+ const views=currentHistory.map(x=>x.viewCount);
+ const likes=currentHistory.map(x=>x.likeCount);
+ const comments=currentHistory.map(x=>x.commentCount);
 
-        const data =
-            await response.json();
+ const zoom=[{type:"inside"},{type:"slider"}];
 
-        document.getElementById("title").innerHTML =
-            `<h2>${data.video.title}</h2>`;
+ function draw(chart,title,dataArr){
+   chart.setOption({
+     title:{text:title,textStyle:{color:"#fff"}},
+     tooltip:{trigger:"axis"},
+     dataZoom:zoom,
+     xAxis:{type:"category",data:times},
+     yAxis:{type:"value",scale:true},
+     series:[{type:"line",smooth:true,showSymbol:false,data:dataArr}]
+   });
+ }
 
-        document.getElementById("thumbnail").src =
-            data.currentStats.thumbnailUrl;
+ draw(viewsChart,"Просмотры",views);
+ draw(likesChart,"Лайки",likes);
+ draw(commentsChart,"Комментарии",comments);
+}
 
-        document.getElementById("views").textContent =
-            data.currentStats.viewCount.toLocaleString();
+function exportCSV(){
+ if(currentHistory.length===0){
+   alert("Сначала загрузите видео");
+   return;
+ }
 
-        document.getElementById("likes").textContent =
-            data.currentStats.likeCount.toLocaleString();
+ let csv="Время,Просмотры,Лайки,Комментарии\n";
 
-        document.getElementById("comments").textContent =
-            data.currentStats.commentCount.toLocaleString();
+ currentHistory.forEach(item=>{
+   csv+=`${item.timestamp},${item.viewCount},${item.likeCount},${item.commentCount}\n`;
+ });
 
-        const times =
-            data.history.map(x =>
-                new Date(x.timestamp)
-                .toLocaleTimeString()
-            );
-
-        const views =
-            data.history.map(x =>
-                x.viewCount
-            );
-
-        const likes =
-            data.history.map(x =>
-                x.likeCount
-            );
-
-        const comments =
-            data.history.map(x =>
-                x.commentCount
-            );
-
-        const zoom = [
-            {type:"inside"},
-            {type:"slider"}
-        ];
-
-        viewsChart.setOption({
-            title:{text:"Просмотры"},
-            tooltip:{trigger:"axis"},
-            dataZoom:zoom,
-            xAxis:{
-                type:"category",
-                data:times
-            },
-            yAxis:{
-                type:"value",
-                scale:true
-            },
-            series:[{
-                type:"line",
-                smooth:true,
-                showSymbol:false,
-                data:views
-            }]
-        });
-
-        likesChart.setOption({
-            title:{text:"Лайки"},
-            tooltip:{trigger:"axis"},
-            dataZoom:zoom,
-            xAxis:{
-                type:"category",
-                data:times
-            },
-            yAxis:{
-                type:"value",
-                scale:true
-            },
-            series:[{
-                type:"line",
-                smooth:true,
-                showSymbol:false,
-                data:likes
-            }]
-        });
-
-        commentsChart.setOption({
-            title:{text:"Комментарии"},
-            tooltip:{trigger:"axis"},
-            dataZoom:zoom,
-            xAxis:{
-                type:"category",
-                data:times
-            },
-            yAxis:{
-                type:"value",
-                scale:true
-            },
-            series:[{
-                type:"line",
-                smooth:true,
-                showSymbol:false,
-                data:comments
-            }]
-        });
-
-    }catch(err){
-
-        console.error(err);
-
-        alert(
-            "Ошибка загрузки данных"
-        );
-
-    }
+ const blob=new Blob([csv],{type:"text/csv;charset=utf-8;"});
+ const link=document.createElement("a");
+ link.href=URL.createObjectURL(blob);
+ link.download="analytics.csv";
+ link.click();
 }
 </script>
-
+</div>
 </body>
 </html>
