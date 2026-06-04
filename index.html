@@ -6,29 +6,34 @@
 <title>YouTube Analytics</title>
 <script src="https://cdn.jsdelivr.net/npm/echarts/dist/echarts.min.js"></script>
 <style>
-body{margin:0;padding:20px;background:#0f172a;color:white;font-family:Arial,sans-serif}
+*{box-sizing:border-box}
+body{margin:0;padding:20px;background:#0f172a;color:#fff;font-family:Arial,sans-serif}
 .container{max-width:1200px;margin:auto}
-input{width:300px;padding:12px;border:none;border-radius:8px}
-button{padding:12px 18px;border:none;border-radius:8px;cursor:pointer;margin-left:5px}
+.top{display:flex;gap:10px;flex-wrap:wrap}
+input{flex:1;min-width:260px;padding:12px;border:none;border-radius:10px}
+button{padding:12px 16px;border:none;border-radius:10px;cursor:pointer}
 .stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:15px;margin-top:20px}
-.card,.chart{background:#1e293b;border-radius:12px}
-.card{padding:15px}
-.chart{width:100%;height:350px;margin-top:20px}
-#thumbnail{margin-top:20px;max-width:100%;border-radius:12px}
+.card{background:#1e293b;padding:15px;border-radius:12px}
+.chart{height:350px;background:#1e293b;border-radius:12px;margin-top:20px}
+#thumbnail{max-width:100%;border-radius:12px;margin-top:20px}
 </style>
 </head>
 <body>
 <div class="container">
 <h1>YouTube Analytics</h1>
 
-<input id="videoId" placeholder="Введите ID видео">
+<div class="top">
+<input id="videoId" placeholder="ID видео или ссылка YouTube">
 <button onclick="loadVideo()">Загрузить</button>
-<button onclick="exportCSV()">Экспорт CSV</button>
+<button onclick="refreshVideo()">🔄 Обновить</button>
+<button onclick="exportCSV()">📥 CSV</button>
+</div>
 
 <h2 id="title"></h2>
 <img id="thumbnail">
 
 <div class="stats">
+<div class="card"><h3>🎥 ID Видео</h3><div id="videoIdDisplay">-</div></div>
 <div class="card"><h3>👁️ Просмотры</h3><div id="views">0</div></div>
 <div class="card"><h3>👍 Лайки</h3><div id="likes">0</div></div>
 <div class="card"><h3>💬 Комментарии</h3><div id="comments">0</div></div>
@@ -40,67 +45,93 @@ button{padding:12px 18px;border:none;border-radius:8px;cursor:pointer;margin-lef
 
 <script>
 let currentHistory=[];
+let currentVideoId="";
 
 const viewsChart=echarts.init(document.getElementById("viewsChart"));
 const likesChart=echarts.init(document.getElementById("likesChart"));
 const commentsChart=echarts.init(document.getElementById("commentsChart"));
 
-async function loadVideo(){
- const id=document.getElementById("videoId").value.trim();
- if(!id){alert("Введите ID видео");return;}
+function extractVideoId(input){
+ const m=input.match(/(?:v=|youtu\.be\/)([a-zA-Z0-9_-]{11})/);
+ return m?m[1]:input.trim();
+}
 
- const res=await fetch(`https://livecounts.lol/api/video/${id}/analytics`);
- const data=await res.json();
-
- currentHistory=data.history||[];
-
- document.getElementById("title").textContent=data.video.title;
- document.getElementById("thumbnail").src=data.currentStats.thumbnailUrl;
- document.getElementById("views").textContent=data.currentStats.viewCount.toLocaleString();
- document.getElementById("likes").textContent=data.currentStats.likeCount.toLocaleString();
- document.getElementById("comments").textContent=data.currentStats.commentCount.toLocaleString();
-
- const times=currentHistory.map(x=>new Date(x.timestamp).toLocaleTimeString());
- const views=currentHistory.map(x=>x.viewCount);
- const likes=currentHistory.map(x=>x.likeCount);
- const comments=currentHistory.map(x=>x.commentCount);
-
- const zoom=[{type:"inside"},{type:"slider"}];
-
- function draw(chart,title,dataArr){
-   chart.setOption({
-     title:{text:title,textStyle:{color:"#fff"}},
-     tooltip:{trigger:"axis"},
-     dataZoom:zoom,
-     xAxis:{type:"category",data:times},
-     yAxis:{type:"value",scale:true},
-     series:[{type:"line",smooth:true,showSymbol:false,data:dataArr}]
-   });
+window.onload=()=>{
+ const saved=localStorage.getItem("lastVideoId");
+ if(saved){
+   document.getElementById("videoId").value=saved;
+   loadVideo();
  }
+};
 
- draw(viewsChart,"Просмотры",views);
- draw(likesChart,"Лайки",likes);
- draw(commentsChart,"Комментарии",comments);
+async function loadVideo(){
+ try{
+  const id=extractVideoId(document.getElementById("videoId").value);
+  if(!id){alert("Введите ID");return;}
+
+  currentVideoId=id;
+  localStorage.setItem("lastVideoId",id);
+
+  const res=await fetch(`https://livecounts.lol/api/video/${id}/analytics`);
+  const data=await res.json();
+
+  currentHistory=data.history||[];
+
+  document.getElementById("title").textContent=data.video.title;
+  document.getElementById("thumbnail").src=data.currentStats.thumbnailUrl;
+  document.getElementById("videoIdDisplay").textContent=id;
+  document.getElementById("views").textContent=data.currentStats.viewCount.toLocaleString();
+  document.getElementById("likes").textContent=data.currentStats.likeCount.toLocaleString();
+  document.getElementById("comments").textContent=data.currentStats.commentCount.toLocaleString();
+
+  const times=currentHistory.map(x=>new Date(x.timestamp).toLocaleTimeString("ru-RU",{hour:"2-digit",minute:"2-digit"}));
+  const views=currentHistory.map(x=>x.viewCount);
+  const likes=currentHistory.map(x=>x.likeCount);
+  const comments=currentHistory.map(x=>x.commentCount);
+
+  const zoom=[{type:"inside"},{type:"slider"}];
+
+  function draw(chart,title,dataArr){
+   chart.setOption({
+    title:{text:title,textStyle:{color:"#fff"}},
+    tooltip:{trigger:"axis"},
+    dataZoom:zoom,
+    xAxis:{type:"category",data:times},
+    yAxis:{type:"value",scale:true},
+    series:[{type:"line",smooth:true,showSymbol:false,data:dataArr}]
+   });
+  }
+
+  draw(viewsChart,"Просмотры",views);
+  draw(likesChart,"Лайки",likes);
+  draw(commentsChart,"Комментарии",comments);
+
+ }catch(e){
+  console.error(e);
+  alert("Ошибка загрузки данных");
+ }
+}
+
+function refreshVideo(){
+ if(currentVideoId) loadVideo();
 }
 
 function exportCSV(){
- if(currentHistory.length===0){
-   alert("Сначала загрузите видео");
-   return;
- }
-
+ if(!currentHistory.length){alert("Нет данных");return;}
  let csv="Время,Просмотры,Лайки,Комментарии\n";
-
- currentHistory.forEach(item=>{
-   csv+=`${item.timestamp},${item.viewCount},${item.likeCount},${item.commentCount}\n`;
+ currentHistory.forEach(i=>{
+  csv+=`${i.timestamp},${i.viewCount},${i.likeCount},${i.commentCount}\n`;
  });
-
  const blob=new Blob([csv],{type:"text/csv;charset=utf-8;"});
- const link=document.createElement("a");
- link.href=URL.createObjectURL(blob);
- link.download="analytics.csv";
- link.click();
+ const a=document.createElement("a");
+ a.href=URL.createObjectURL(blob);
+ a.download=(currentVideoId||"analytics")+".csv";
+ a.click();
 }
+
+setInterval(()=>{
+ if(currentVideoId) loadVideo();
+},60000);
 </script>
 </div>
 </body>
