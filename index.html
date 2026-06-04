@@ -56,12 +56,23 @@ function extractVideoId(input){
  return m?m[1]:input.trim();
 }
 
-window.onload=()=>{
- const saved=localStorage.getItem("lastVideoId");
- if(saved){
-   document.getElementById("videoId").value=saved;
-   loadVideo();
- }
+window.onload = () => {
+
+    const params = new URLSearchParams(window.location.search);
+    const urlId = params.get("id");
+
+    if (urlId) {
+        document.getElementById("videoId").value = urlId;
+        loadVideo();
+        return;
+    }
+
+    const saved = localStorage.getItem("lastVideoId");
+
+    if (saved) {
+        document.getElementById("videoId").value = saved;
+        loadVideo();
+    }
 };
 
 async function loadVideo(){
